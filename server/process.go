@@ -8,6 +8,6 @@ package server
 import "net"
 
 // 处理请求
-func (s Server) process(conn net.Conn) {
+func (s *Server) process(conn net.Conn) {
 
 }
