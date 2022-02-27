@@ -11,8 +11,8 @@ func init() {
 }
 
 const (
-	JSON CodecType = "json"
-	BYTE CodecType = "byte"
+	JSON CodecType = iota
+	BYTE
 )
 
 // Codec 序列化接口
@@ -21,7 +21,7 @@ type Codec interface {
 	Decode(data []byte, v interface{}) error
 }
 
-type CodecType string
+type CodecType byte
 
 type codecManager struct {
 	codecMap map[CodecType]Codec
