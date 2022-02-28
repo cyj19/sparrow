@@ -19,6 +19,15 @@ type Option struct {
 	SendChannelSize int
 }
 
+func genDefaultOption() *Option {
+	return &Option{
+		ctx:             context.Background(),
+		Protocol:        "tcp",
+		Host:            "0.0.0.0:8787",
+		SendChannelSize: 1000,
+	}
+}
+
 // OptionSetter 快速设置Option
 type OptionSetter func(option *Option)
 
