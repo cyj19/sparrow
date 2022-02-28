@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log"
 )
 
 // 消息协议设计 使用前缀长度法
@@ -65,7 +66,8 @@ func NewProtocol() *Protocol {
 // DecodeMessage 解码消息
 func DecodeMessage(r io.Reader) (*Message, error) {
 	headerData := make([]byte, HeaderSize)
-	_, err := io.ReadFull(r, headerData)
+	// 读取标志位
+	_, err := io.ReadFull(r, headerData[:1])
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +75,27 @@ func DecodeMessage(r io.Reader) (*Message, error) {
 	if headerData[0] != StartChar {
 		return nil, errors.New("the message is not valid")
 	}
+
+	// 读取头部剩下的数据
+	_, err = io.ReadFull(r, headerData[1:])
+	if err != nil {
+		return nil, err
+	}
+
+	// 解码头部
 	header, err := DecodeHeader(headerData)
 	if err != nil {
 		return nil, err
 	}
 	bodySize := header.MagicSize + header.ServiceNameSize + header.ServiceMethodSize + header.MetaDataSize + header.PayLoadSize
 	bodyData := make([]byte, bodySize)
+	// 读取消息体的数据
+	_, err = io.ReadFull(r, bodyData)
+	if err != nil {
+		return nil, err
+	}
+
+	// 解码消息体
 	body, err := DecodeBody(bodyData, header)
 	if err != nil {
 		return nil, err
@@ -113,51 +130,88 @@ func DecodeBody(data []byte, header *Header) (*Body, error) {
 	serviceMethodSize := header.ServiceMethodSize
 	metaDataSize := header.MetaDataSize
 	payloadSize := header.PayLoadSize
+	log.Println(magicSize, serviceNameSize, serviceMethodSize, metaDataSize, payloadSize)
 
-	body.Magic = string(data[:magicSize])
-	body.ServiceName = string(data[magicSize:serviceNameSize])
-	body.ServiceMethod = string(data[serviceNameSize:serviceMethodSize])
-	body.MetaData = data[serviceMethodSize:metaDataSize]
-	body.Payload = data[metaDataSize:payloadSize]
+	var startIndex uint32 = 0
+	endIndex := startIndex + magicSize
+	length := endIndex - startIndex
+	// 创建新的切片进行拷贝，避免操作同一个底层数组
+	magic := make([]byte, length)
+	copy(magic, data[startIndex:endIndex])
+	body.Magic = string(magic)
+
+	startIndex = endIndex
+	endIndex = startIndex + serviceNameSize
+	length = endIndex - startIndex
+	// 创建新的切片进行拷贝，避免操作同一个底层数组
+	serviceName := make([]byte, length)
+	copy(serviceName, data[startIndex:endIndex])
+	body.ServiceName = string(serviceName)
+
+	startIndex = endIndex
+	endIndex = startIndex + serviceMethodSize
+	length = endIndex - startIndex
+	// 创建新的切片进行拷贝，避免操作同一个底层数组
+	serviceMethod := make([]byte, length)
+	copy(serviceMethod, data[startIndex:endIndex])
+	body.ServiceMethod = string(serviceMethod)
+
+	startIndex = endIndex
+	endIndex = startIndex + metaDataSize
+	length = endIndex - startIndex
+	metaData := make([]byte, length)
+	copy(metaData, data[startIndex:endIndex])
+	body.MetaData = metaData
+
+	startIndex = endIndex
+	endIndex = startIndex + payloadSize
+	length = endIndex - startIndex
+	payload := make([]byte, length)
+	copy(payload, data[startIndex:endIndex])
+	body.Payload = payload
 	return body, nil
 }
 
 // EncodeMessage 发送前编码消息
 func EncodeMessage(message *Message) ([]byte, error) {
-	data := make([]byte, 0)
-	headerData, err := EncodeHeader(message.Header)
-	if err != nil {
-		return nil, err
-	}
-	bodyData, err := EncodeBody(message.Body, message.Header)
-	if err != nil {
-		return nil, err
-	}
-	copy(data, headerData)
-	copy(data, bodyData)
-	return data, nil
-}
+	header := message.Header
+	body := message.Body
+	serviceNameByte := []byte(body.ServiceName)
+	serviceMethodByte := []byte(body.ServiceMethod)
 
-func EncodeHeader(header *Header) ([]byte, error) {
-	data := make([]byte, HeaderSize)
+	msgSize := HeaderSize + len(body.Magic) + len(serviceNameByte) + len(serviceMethodByte) + len(body.MetaData) + len(body.Payload)
+	data := make([]byte, msgSize)
+
+	// 构建头部
 	data[0] = header.Start
 	data[1] = header.Version
 	data[2] = header.CodecType
-	binary.BigEndian.PutUint32(data[2:6], header.MagicSize)
-	binary.BigEndian.PutUint32(data[6:10], header.ServiceNameSize)
-	binary.BigEndian.PutUint32(data[10:14], header.ServiceMethodSize)
-	binary.BigEndian.PutUint32(data[14:18], header.MetaDataSize)
-	binary.BigEndian.PutUint32(data[18:22], header.PayLoadSize)
-	return data, nil
-}
+	binary.BigEndian.PutUint32(data[2:6], uint32(len(body.Magic)))
+	binary.BigEndian.PutUint32(data[6:10], uint32(len(serviceNameByte)))
+	binary.BigEndian.PutUint32(data[10:14], uint32(len(serviceMethodByte)))
+	binary.BigEndian.PutUint32(data[14:18], uint32(len(body.MetaData)))
+	binary.BigEndian.PutUint32(data[18:22], uint32(len(body.Payload)))
 
-func EncodeBody(body *Body, header *Header) ([]byte, error) {
-	bodySize := header.MagicSize + header.ServiceNameSize + header.ServiceMethodSize + header.MetaDataSize + header.PayLoadSize
-	data := make([]byte, bodySize)
-	data = append(data, body.Magic...)
-	data = append(data, body.ServiceName...)
-	data = append(data, body.ServiceMethod...)
-	data = append(data, body.MetaData...)
-	data = append(data, body.Payload...)
+	// 构建body
+	startIndex := HeaderSize
+	endIndex := startIndex + len(body.Magic)
+	copy(data[startIndex:endIndex], body.Magic)
+
+	startIndex = endIndex
+	endIndex = startIndex + len(body.ServiceName)
+	copy(data[startIndex:endIndex], body.ServiceName)
+
+	startIndex = endIndex
+	endIndex = startIndex + len(body.ServiceMethod)
+	copy(data[startIndex:endIndex], body.ServiceMethod)
+
+	startIndex = endIndex
+	endIndex = startIndex + len(body.MetaData)
+	copy(data[startIndex:endIndex], body.MetaData)
+
+	startIndex = endIndex
+	endIndex = startIndex + len(body.Payload)
+	copy(data[startIndex:endIndex], body.Payload)
+
 	return data, nil
 }

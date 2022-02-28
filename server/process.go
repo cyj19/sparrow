@@ -8,6 +8,7 @@ package server
 import (
 	"github.com/cyj19/sparrow/codec"
 	"github.com/cyj19/sparrow/protocol"
+	"io"
 	"log"
 	"net"
 	"reflect"
@@ -42,9 +43,14 @@ func (s *Server) process(conn net.Conn) {
 	for {
 		message, err := protocol.DecodeMessage(conn)
 		if err != nil {
+			if err == io.EOF {
+				//log.Printf("ip: %s close", conn.RemoteAddr())
+				continue
+			}
 			log.Printf("protocol.DecodeMessage error:%v", err)
 			continue
 		}
+		log.Println(message)
 		go s.handleRequest(sChannel, message)
 	}
 
@@ -58,25 +64,17 @@ func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) 
 		log.Println("rpc not have this codecType")
 		return
 	}
-	var serviceName, serviceMethod string
-	err := codecPlugin.Decode([]byte(reqMsg.Body.ServiceName), serviceName)
-	if err != nil {
-		log.Printf("codecPlugin.Decode error:%v", err)
-		return
-	}
-	err = codecPlugin.Decode([]byte(reqMsg.Body.ServiceMethod), serviceMethod)
-	if err != nil {
-		log.Printf("codecPlugin.Decode error:%v", err)
-		return
-	}
+	serviceName := reqMsg.Body.ServiceName
+	serviceMethod := reqMsg.Body.ServiceMethod
+
 	metaData := make([]byte, len(reqMsg.Body.MetaData))
-	err = codecPlugin.Decode(reqMsg.Body.MetaData, metaData)
+	err := codecPlugin.Decode(reqMsg.Body.MetaData, metaData)
 	if err != nil {
 		log.Printf("codecPlugin.Decode error:%v", err)
 		return
 	}
 	payload := make([]byte, len(reqMsg.Body.Payload))
-	err = codecPlugin.Decode(reqMsg.Body.Payload, payload)
+	err = codecPlugin.Decode(reqMsg.Body.Payload, &payload)
 	if err != nil {
 		log.Printf("codecPlugin.Decode error:%v", err)
 		return
