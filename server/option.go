@@ -12,10 +12,11 @@ import (
 
 // Option 每个服务端的配置
 type Option struct {
-	ctx      context.Context
-	Protocol string // 通信协议
-	Host     string // 服务端地址
-	nl       net.Listener
+	ctx             context.Context
+	Protocol        string // 通信协议
+	Host            string // 服务端地址
+	nl              net.Listener
+	SendChannelSize int
 }
 
 // OptionSetter 快速设置Option
