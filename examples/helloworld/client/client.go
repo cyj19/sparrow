@@ -20,10 +20,13 @@ type ResponseReply struct {
 }
 
 func main() {
-	c := client.NewClient()
+	c, err := client.NewClient("tcp", "0.0.0.0:8787")
+	if err != nil {
+		log.Fatalln(err)
+	}
 	reqArgs := RequestArg{Name: "cyj"}
-	respReply := &ResponseReply{}
-	err := c.Call("HelloWorld", "Hello", reqArgs, respReply)
+	respReply := ResponseReply{}
+	err = c.Call("HelloWorld", "Hello", &reqArgs, &respReply)
 	if err != nil {
 		log.Printf("call error:%v", err)
 	}

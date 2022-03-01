@@ -7,6 +7,7 @@ package server
 
 import (
 	"github.com/cyj19/sparrow/codec"
+	"github.com/cyj19/sparrow/compressor"
 	"github.com/cyj19/sparrow/protocol"
 	"io"
 	"log"
@@ -17,40 +18,46 @@ import (
 // 处理请求
 func (s *Server) process(conn net.Conn) {
 	defer conn.Close()
+
 	sChannel := NewSendChannel(s.Option.SendChannelSize)
-	defer sChannel.Close()
+	defer func() {
+		sChannel.Close()
+	}()
+
 	// 回复消息
 	go func() {
+	loop:
 		for {
 			select {
 			case respMsg, ok := <-sChannel.Ch:
 				if !ok {
-					log.Println("connect is closed...")
-					continue
+					break loop
 
 				}
 				// 写入响应
 				_, err := conn.Write(respMsg)
 				if err != nil {
 					log.Printf("conn.Write error:%v", err)
-					continue
+					break loop
 				}
+				log.Println("finish write message...")
 			}
 		}
 	}()
 
-	// 处理消息
+	// 读取消息
 	for {
 		message, err := protocol.DecodeMessage(conn)
 		if err != nil {
+			// 说明连接被对端关闭了
 			if err == io.EOF {
-				//log.Printf("ip: %s close", conn.RemoteAddr())
-				continue
+				log.Printf("ip: %s close", conn.RemoteAddr())
+				break
 			}
-			log.Printf("protocol.DecodeMessage error:%v", err)
-			continue
+			//log.Printf("protocol.DecodeMessage error:%v", err)
+			break
 		}
-		log.Println(message)
+
 		go s.handleRequest(sChannel, message)
 	}
 
@@ -67,19 +74,6 @@ func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) 
 	serviceName := reqMsg.Body.ServiceName
 	serviceMethod := reqMsg.Body.ServiceMethod
 
-	metaData := make([]byte, len(reqMsg.Body.MetaData))
-	err := codecPlugin.Decode(reqMsg.Body.MetaData, metaData)
-	if err != nil {
-		log.Printf("codecPlugin.Decode error:%v", err)
-		return
-	}
-	payload := make([]byte, len(reqMsg.Body.Payload))
-	err = codecPlugin.Decode(reqMsg.Body.Payload, &payload)
-	if err != nil {
-		log.Printf("codecPlugin.Decode error:%v", err)
-		return
-	}
-
 	// 获取服务实例
 	srv, ok := s.serviceMap[serviceName]
 	if !ok {
@@ -92,11 +86,29 @@ func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) 
 		return
 	}
 	// 创建参数实例
-	argVal := reflect.New(method.argType)
-	replyVal := reflect.New(method.replyType)
+	argVal := reflect.New(method.argType.Elem()).Interface()
+	replyVal := reflect.New(method.replyType.Elem()).Interface()
+
+	compressor, ex := compressor.Get(compressor.CompressorType(reqMsg.Header.CompressorType))
+	if !ex {
+		log.Println("rpc not have this compressor Type")
+		return
+	}
+
+	var err error
+	reqMsg.Body.Payload, err = compressor.Unzip(reqMsg.Body.Payload)
+	if err != nil {
+		log.Printf("server compressor.Unzip error:%#v", err)
+	}
+
+	err = codecPlugin.Decode(reqMsg.Body.Payload, argVal)
+	if err != nil {
+		log.Printf("server codecPlugin.Decode error:%v", err)
+		return
+	}
 	// 调用方法
-	refVals := method.method.Func.Call([]reflect.Value{srv.refVal, argVal, replyVal})
-	errorVal := refVals[0].Interface()
+	reflectValues := method.method.Func.Call([]reflect.Value{srv.refVal, reflect.ValueOf(argVal), reflect.ValueOf(replyVal)})
+	errorVal := reflectValues[0].Interface()
 	if errorVal != nil {
 		// 调用失败
 		log.Printf("%s.%s error:%v", serviceName, serviceMethod, errorVal)
@@ -107,24 +119,26 @@ func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) 
 		Header: reqMsg.Header,
 	}
 	body := &protocol.Body{
-		ServiceName:   reqMsg.Body.ServiceName,
-		ServiceMethod: reqMsg.Body.ServiceMethod,
+		Magic:         reqMsg.Body.Magic,
+		ServiceName:   serviceName,
+		ServiceMethod: serviceMethod,
 	}
 	// 序列化
-	body.MetaData, err = codecPlugin.Encode(argVal.Interface())
+
+	body.Payload, err = codecPlugin.Encode(replyVal)
 	if err != nil {
 		log.Printf("codecPlugin.Encode error:%v", err)
 		return
 	}
-	body.Payload, err = codecPlugin.Encode(replyVal.Interface())
-	if err != nil {
-		log.Printf("codecPlugin.Encode error:%v", err)
-		return
-	}
+	msg.Body = body
 	msgData, err := protocol.EncodeMessage(msg)
 	if err != nil {
 		log.Printf("protocol.EncodeMessage error:%v", err)
 		return
 	}
-	sChannel.Send(msgData)
+	err = sChannel.Send(msgData)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 }

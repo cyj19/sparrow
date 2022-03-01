@@ -25,7 +25,7 @@ func NewSendChannel(size int) *SendChannel {
 
 func (c *SendChannel) Send(data []byte) error {
 	defer c.rw.Unlock()
-	c.rw.RLock()
+	c.rw.Lock()
 
 	if c.close {
 		return errors.New("sendChannel is closed")

@@ -22,7 +22,7 @@ type HelloWordResponse struct {
 	Msg string
 }
 
-func (w *HelloWorld) Hello(args HelloWordRequest, reply *HelloWordResponse) error {
+func (w *HelloWorld) Hello(args *HelloWordRequest, reply *HelloWordResponse) error {
 	reply.Msg = fmt.Sprintf("hello %s", args.Name)
 	return nil
 }
