@@ -14,8 +14,8 @@ import (
 // 消息协议设计 使用前缀长度法
 /**
 Header:
-| start | version | codecType | compressionType | magicSize | serviceNameSize | serviceMethodSize | payloadSize |
-| 0x03  |   0x01  |     1     |        1        |     4     |         4       |          4        |      4      |
+| start | version | codecType | compressorType | magicSize | serviceNameSize | serviceMethodSize | payloadSize |
+| 0x03  |   0x01  |     1     |        1       |     4     |         4       |          4        |      4      |
 
 Body:
 | magic | serviceName | serviceMethod | payload |
@@ -33,7 +33,7 @@ type Header struct {
 	Start             byte   // 起始符
 	Version           byte   // 版本号
 	CodecType         byte   // 序列化类型
-	CompressionType   byte   // 压缩类型
+	CompressorType    byte   // 压缩类型
 	MagicSize         uint32 // 魔法值大小
 	ServiceNameSize   uint32 // 服务名称大小
 	ServiceMethodSize uint32 // 服务方法大小
@@ -100,10 +100,10 @@ func DecodeMessage(r io.Reader) (*Message, error) {
 
 func DecodeHeader(data []byte) (*Header, error) {
 	header := &Header{
-		Start:           data[0],
-		Version:         data[1],
-		CodecType:       data[2],
-		CompressionType: data[3],
+		Start:          data[0],
+		Version:        data[1],
+		CodecType:      data[2],
+		CompressorType: data[3],
 	}
 	// 大端字符序转为uint32
 	header.MagicSize = binary.BigEndian.Uint32(data[4:8])
@@ -168,7 +168,7 @@ func EncodeMessage(message *Message) ([]byte, error) {
 	data[0] = header.Start
 	data[1] = header.Version
 	data[2] = header.CodecType
-	data[3] = header.CompressionType
+	data[3] = header.CompressorType
 	binary.BigEndian.PutUint32(data[4:8], uint32(len(body.Magic)))
 	binary.BigEndian.PutUint32(data[8:12], uint32(len(serviceNameByte)))
 	binary.BigEndian.PutUint32(data[12:16], uint32(len(serviceMethodByte)))
