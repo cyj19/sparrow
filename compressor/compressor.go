@@ -8,7 +8,7 @@ package compressor
 import "errors"
 
 func init() {
-	cManager.Register(GZIP, &Gzip{})
+	defaultManager.register(GZIP, &Gzip{})
 }
 
 // Compressor 压缩解压接口
@@ -28,17 +28,17 @@ const (
 	GZIP CompressorType = iota
 )
 
-var cManager = &compressorManager{
+var defaultManager = &compressorManager{
 	compressorMap: map[CompressorType]Compressor{},
 }
 
-func (m *compressorManager) Get(cType CompressorType) (Compressor, bool) {
-	compressor, ok := m.compressorMap[cType]
+func Get(cType CompressorType) (Compressor, bool) {
+	compressor, ok := defaultManager.compressorMap[cType]
 	return compressor, ok
 }
 
-func (m *compressorManager) Register(cType CompressorType, compressor Compressor) error {
-	return m.register(cType, compressor)
+func Register(cType CompressorType, compressor Compressor) error {
+	return defaultManager.register(cType, compressor)
 }
 
 func (m *compressorManager) register(cType CompressorType, compressor Compressor) error {
