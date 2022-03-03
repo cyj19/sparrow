@@ -6,9 +6,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/cyj19/sparrow/client"
 	"log"
+	"sync"
+	"time"
 )
 
 type RequestArg struct {
@@ -24,11 +27,33 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	reqArgs := RequestArg{Name: "cyj"}
-	respReply := ResponseReply{}
-	err = c.Call("HelloWorld", "Hello", &reqArgs, &respReply)
-	if err != nil {
-		log.Printf("call error:%v", err)
-	}
-	fmt.Println(respReply)
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Minute)
+
+	go func() {
+		defer wg.Done()
+		reqArgs := RequestArg{Name: "cyj"}
+		respReply := ResponseReply{}
+		err := c.Call(ctx, "HelloWorld", "Hello", &reqArgs, &respReply)
+		if err != nil {
+			log.Printf("call error:%v", err)
+		}
+		fmt.Println(respReply)
+	}()
+
+	go func() {
+		defer wg.Done()
+		reqArgs := RequestArg{Name: "zhangsan"}
+		respReply := ResponseReply{}
+		err := c.Call(ctx, "HelloWorld", "Hello", &reqArgs, &respReply)
+		if err != nil {
+			log.Printf("call error:%v", err)
+		}
+		fmt.Println(respReply)
+	}()
+
+	wg.Wait()
+
 }

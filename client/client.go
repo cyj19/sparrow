@@ -6,6 +6,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/cyj19/sparrow/codec"
@@ -15,6 +16,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 )
 
 type Caller struct {
@@ -49,28 +51,48 @@ func NewClient(proto, addr string) (*Client, error) {
 	return c, nil
 }
 
-func (c *Client) Call(serviceName, serviceMethod string, args, reply interface{}) error {
+func (c *Client) registerCall(magic string, caller *Caller) {
+	c.respMutex.Lock()
+	c.callMap[magic] = caller
+	c.respMutex.Unlock()
+}
+
+func (c *Client) removeCall(magic string) {
+	c.respMutex.Lock()
+	delete(c.callMap, magic)
+	c.respMutex.Unlock()
+}
+
+func (c *Client) Call(ctx context.Context, serviceName, serviceMethod string, args, reply interface{}) error {
 
 	if serviceName == "" || serviceMethod == "" {
 		return errors.New("serviceName or serviceMethod is null")
 	}
 
 	done := make(chan error, 0)
-	c.call(done, serviceName, serviceMethod, args, reply)
+	// 生成魔法值
+	magic := xid.New().String()
+	defer func() {
+		c.removeCall(magic)
+	}()
+
+	go c.call(done, magic, serviceName, serviceMethod, args, reply)
+
 	select {
+	case <-ctx.Done():
+		return errors.New("rpc client: call failed: " + ctx.Err().Error())
 	case err, ok := <-done:
 		if !ok {
 			return nil
 		}
 		return err
-	case <-c.close:
-		return errors.New("connect close")
+	case err := <-c.close:
+		return errors.New("connect closed by error: " + err.Error())
 	}
 
-	return nil
 }
 
-func (c *Client) call(done chan error, serviceName, serviceMethod string, args, reply interface{}) error {
+func (c *Client) call(done chan error, magic, serviceName, serviceMethod string, args, reply interface{}) {
 	// 构建请求
 	reqHeader := &protocol.Header{
 		Start:          protocol.StartChar,
@@ -78,38 +100,30 @@ func (c *Client) call(done chan error, serviceName, serviceMethod string, args, 
 		CodecType:      byte(c.Option.codecType),
 		CompressorType: byte(c.Option.compressorType),
 	}
-	// 生成魔法值
-	magic := xid.New().String()
+
 	reqBody := &protocol.Body{
 		Magic:         magic,
 		ServiceName:   serviceName,
 		ServiceMethod: serviceMethod,
 	}
 
-	c.respMutex.Lock()
-	c.callMap[magic] = &Caller{
-		Reply: reply,
-		done:  done,
-	}
-	c.respMutex.Unlock()
-
 	// 序列化
 	codecPlugin, ok := codec.Get(c.Option.codecType)
 	if !ok {
-		return errors.New("codec plugin is not exist")
+		c.close <- errors.New("codec plugin is not exist")
 	}
 	payload, err := codecPlugin.Encode(args)
 	if err != nil {
-		return errors.New(fmt.Sprintf("client encode payload error:%v", err))
+		c.close <- errors.New(fmt.Sprintf("client encode payload error:%v", err))
 	}
 	// 压缩
 	cpr, ex := compressor.Get(c.Option.compressorType)
 	if !ex {
-		return errors.New("compress plugin is not exist")
+		c.close <- errors.New("compress plugin is not exist")
 	}
 	payload, err = cpr.Zip(payload)
 	if err != nil {
-		return errors.New(fmt.Sprintf("client compress payload error:%#v", err))
+		c.close <- errors.New(fmt.Sprintf("client compress payload error:%#v", err))
 	}
 	reqBody.Payload = payload
 	reqMsg := &protocol.Message{
@@ -119,26 +133,43 @@ func (c *Client) call(done chan error, serviceName, serviceMethod string, args, 
 
 	reqData, err := protocol.EncodeMessage(reqMsg)
 	if err != nil {
-		return errors.New(fmt.Sprintf("client encode message error:%v", err))
+		c.close <- errors.New(fmt.Sprintf("client encode message error:%v", err))
+	}
+
+	// 设置写超时
+	if c.Option.writeTimeout > 0 {
+		now := time.Now()
+		_ = c.conn.SetWriteDeadline(now.Add(c.Option.writeTimeout))
 	}
 
 	c.reqMutex.Lock()
 	_, err = c.conn.Write(reqData)
 	c.reqMutex.Unlock()
 
-	return err
+	if err != nil {
+		c.close <- err
+	}
+
+	c.registerCall(magic, &Caller{
+		Reply: reply,
+		done:  done,
+	})
+
 }
 
 func (c *Client) receive() {
-	defer c.conn.Close()
+	defer func() {
+		_ = c.conn.Close()
+	}()
 	for {
 		callDone, err := c.handleResponse()
 		// 调用出错
 		if err != nil && callDone != nil {
 			callDone <- err
 		}
-		// 连接关闭
+		// 客户端发生错误
 		if err != nil && callDone == nil {
+			c.close <- err
 			break
 		}
 		// 正常调用结束
@@ -150,15 +181,18 @@ func (c *Client) receive() {
 }
 
 func (c *Client) handleResponse() (done chan error, err error) {
+	// 设置读超时
+	if c.Option.readTimeout > 0 {
+		now := time.Now()
+		_ = c.conn.SetReadDeadline(now.Add(c.Option.readTimeout))
+	}
 	msg, err := protocol.DecodeMessage(c.conn)
 	if err != nil {
-		close(c.close)
 		return nil, err
 	}
 	caller, ex := c.callMap[msg.Body.Magic]
 	if !ex {
 		err = errors.New("codec plugin is not exist")
-		close(c.close)
 		return nil, err
 	}
 	// 解压
@@ -166,12 +200,10 @@ func (c *Client) handleResponse() (done chan error, err error) {
 	compressPlugin, ex := compressor.Get(compressorType)
 	if !ex {
 		err = errors.New("compressor plugin is not exist")
-		close(c.close)
 		return nil, err
 	}
 	msg.Body.Payload, err = compressPlugin.Unzip(msg.Body.Payload)
 	if err != nil {
-		close(c.close)
 		return nil, err
 	}
 	// 反序列化
@@ -179,7 +211,6 @@ func (c *Client) handleResponse() (done chan error, err error) {
 	codecPlugin, ok := codec.Get(cType)
 	if !ok {
 		err = errors.New("codec plugin is not exist")
-		close(c.close)
 		return nil, err
 	}
 	err = codecPlugin.Decode(msg.Body.Payload, caller.Reply)
