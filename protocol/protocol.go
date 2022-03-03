@@ -8,7 +8,6 @@ package protocol
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/rs/xid"
 	"io"
 )
 
@@ -159,9 +158,6 @@ func DecodeBody(data []byte, header *Header) (*Body, error) {
 func EncodeMessage(message *Message) ([]byte, error) {
 	header := message.Header
 	body := message.Body
-	if body.Magic == "" {
-		body.Magic = xid.New().String()
-	}
 	serviceNameByte := []byte(body.ServiceName)
 	serviceMethodByte := []byte(body.ServiceMethod)
 

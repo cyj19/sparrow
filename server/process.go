@@ -64,7 +64,14 @@ func (s *Server) process(conn net.Conn) {
 }
 
 func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) {
-	// 反序列化
+
+	compressorType := compressor.CompressorType(reqMsg.Header.CompressorType)
+	compressPlugin, ex := compressor.Get(compressorType)
+	if !ex {
+		log.Println("rpc not have this compressor type")
+		return
+	}
+
 	cType := codec.CodecType(reqMsg.Header.CodecType)
 	codecPlugin, ok := codec.Get(cType)
 	if !ok {
@@ -89,18 +96,14 @@ func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) 
 	argVal := reflect.New(method.argType.Elem()).Interface()
 	replyVal := reflect.New(method.replyType.Elem()).Interface()
 
-	compressor, ex := compressor.Get(compressor.CompressorType(reqMsg.Header.CompressorType))
-	if !ex {
-		log.Println("rpc not have this compressor Type")
-		return
-	}
-
+	// 解压
 	var err error
-	reqMsg.Body.Payload, err = compressor.Unzip(reqMsg.Body.Payload)
+	reqMsg.Body.Payload, err = compressPlugin.Unzip(reqMsg.Body.Payload)
 	if err != nil {
 		log.Printf("server compressor.Unzip error:%#v", err)
 	}
 
+	// 反序列化
 	err = codecPlugin.Decode(reqMsg.Body.Payload, argVal)
 	if err != nil {
 		log.Printf("server codecPlugin.Decode error:%v", err)
@@ -124,10 +127,15 @@ func (s *Server) handleRequest(sChannel *SendChannel, reqMsg *protocol.Message) 
 		ServiceMethod: serviceMethod,
 	}
 	// 序列化
-
 	body.Payload, err = codecPlugin.Encode(replyVal)
 	if err != nil {
 		log.Printf("codecPlugin.Encode error:%v", err)
+		return
+	}
+	// 压缩
+	body.Payload, err = compressPlugin.Zip(body.Payload)
+	if err != nil {
+		log.Printf("compressPlugin.Encode error:%v", err)
 		return
 	}
 	msg.Body = body
