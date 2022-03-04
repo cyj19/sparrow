@@ -14,6 +14,8 @@ import (
 type ByteCodec struct {
 }
 
+var _ Codec = (*ByteCodec)(nil)
+
 func (b *ByteCodec) Encode(v interface{}) ([]byte, error) {
 	if data, ok := v.([]byte); ok {
 		return data, nil

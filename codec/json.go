@@ -10,6 +10,8 @@ import "encoding/json"
 type JsonCodec struct {
 }
 
+var _ Codec = (*JsonCodec)(nil)
+
 func (j *JsonCodec) Encode(v interface{}) ([]byte, error) {
 	return json.Marshal(v)
 }

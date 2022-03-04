@@ -14,6 +14,8 @@ import (
 type Gzip struct {
 }
 
+var _ Compressor = (*Gzip)(nil)
+
 func (g *Gzip) Zip(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)

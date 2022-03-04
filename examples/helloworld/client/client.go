@@ -28,31 +28,23 @@ func main() {
 		log.Fatalln(err)
 	}
 	wg := sync.WaitGroup{}
-	wg.Add(2)
 
 	ctx, _ := context.WithTimeout(context.Background(), 3*time.Minute)
 
-	go func() {
-		defer wg.Done()
-		reqArgs := RequestArg{Name: "cyj"}
-		respReply := ResponseReply{}
-		err := c.Call(ctx, "HelloWorld", "Hello", &reqArgs, &respReply)
-		if err != nil {
-			log.Printf("call error:%v", err)
-		}
-		fmt.Println(respReply)
-	}()
-
-	go func() {
-		defer wg.Done()
-		reqArgs := RequestArg{Name: "zhangsan"}
-		respReply := ResponseReply{}
-		err := c.Call(ctx, "HelloWorld", "Hello", &reqArgs, &respReply)
-		if err != nil {
-			log.Printf("call error:%v", err)
-		}
-		fmt.Println(respReply)
-	}()
+	for i := 1; i < 11; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			name := fmt.Sprintf("cyj%d", i)
+			reqArgs := RequestArg{Name: name}
+			respReply := ResponseReply{}
+			err := c.Call(ctx, "HelloWorld", "Hello", &reqArgs, &respReply)
+			if err != nil {
+				log.Printf("call error:%v", err)
+			}
+			fmt.Println(respReply)
+		}(i)
+	}
 
 	wg.Wait()
 
