@@ -7,14 +7,15 @@ package server
 
 import (
 	"context"
+	"github.com/cyj19/sparrow/network"
 	"net"
 )
 
 // Option 每个服务端的配置
 type Option struct {
 	ctx             context.Context
-	Protocol        string // 通信协议
-	Host            string // 服务端地址
+	Protocol        network.Protocol // 通信协议
+	Host            string           // 服务端地址
 	nl              net.Listener
 	SendChannelSize int
 }
@@ -22,7 +23,7 @@ type Option struct {
 func genDefaultOption() *Option {
 	return &Option{
 		ctx:             context.Background(),
-		Protocol:        "tcp",
+		Protocol:        network.TCP,
 		Host:            "0.0.0.0:8787",
 		SendChannelSize: 1000,
 	}
@@ -34,7 +35,14 @@ type OptionSetter func(option *Option)
 func UseTCP(host string) OptionSetter {
 	return func(option *Option) {
 		option.Host = host
-		option.Protocol = "tcp"
+		option.Protocol = network.TCP
+	}
+}
+
+func UseUnix(host string) OptionSetter {
+	return func(option *Option) {
+		option.Host = host
+		option.Protocol = network.UNIX
 	}
 }
 

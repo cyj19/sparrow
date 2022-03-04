@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/cyj19/sparrow/codec"
 	"github.com/cyj19/sparrow/compressor"
+	"github.com/cyj19/sparrow/network"
 	"github.com/cyj19/sparrow/protocol"
 	"github.com/rs/xid"
 	"log"
@@ -33,20 +34,19 @@ type Client struct {
 	close     chan error // 通知关闭连接
 }
 
-func NewClient(proto, addr string) (*Client, error) {
-	conn, err := net.Dial(proto, addr)
-	if err != nil {
-		return nil, err
-	}
-
+func NewClient(ptl, addr string) (*Client, error) {
 	c := &Client{
 		Option:    defaultOption(),
 		reqMutex:  new(sync.Mutex),
 		respMutex: new(sync.Mutex),
-		conn:      conn,
 		callMap:   map[string]*Caller{},
 		close:     make(chan error),
 	}
+	conn, err := network.Client.Gen(network.Protocol(ptl), addr, c.Option.connectTimeout)
+	if err != nil {
+		return nil, err
+	}
+	c.conn = conn
 	go c.receive()
 	return c, nil
 }

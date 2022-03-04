@@ -8,8 +8,8 @@ package server
 import (
 	"errors"
 	"fmt"
+	"github.com/cyj19/sparrow/network"
 	"log"
-	"net"
 )
 
 // Server 服务管理器
@@ -67,7 +67,7 @@ func (s *Server) Run(fns ...OptionSetter) error {
 		fn(s.Option)
 	}
 	var err error
-	s.Option.nl, err = net.Listen(s.Option.Protocol, s.Option.Host)
+	s.Option.nl, err = network.Server.Gen(s.Option.Protocol, s.Option.Host)
 	if err != nil {
 		return err
 	}
