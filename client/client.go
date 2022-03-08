@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"github.com/cyj19/sparrow/codec"
 	"github.com/cyj19/sparrow/compressor"
-	"github.com/cyj19/sparrow/network"
 	"github.com/cyj19/sparrow/protocol"
+	"github.com/cyj19/sparrow/transport"
 	"github.com/rs/xid"
 	"log"
 	"net"
@@ -42,7 +42,7 @@ func NewClient(ptl, addr string) (*Client, error) {
 		callMap:   map[string]*Caller{},
 		close:     make(chan error),
 	}
-	conn, err := network.Client.Gen(network.Protocol(ptl), addr, c.Option.connectTimeout)
+	conn, err := transport.Client.Gen(transport.Protocol(ptl), addr, c.Option.connectTimeout)
 	if err != nil {
 		return nil, err
 	}
