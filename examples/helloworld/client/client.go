@@ -8,7 +8,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/cyj19/sparrow/balance"
 	"github.com/cyj19/sparrow/client"
+	"github.com/cyj19/sparrow/discovery"
 	"log"
 	"sync"
 	"time"
@@ -23,7 +25,9 @@ type ResponseReply struct {
 }
 
 func main() {
-	c, err := client.NewClient("tcp", "0.0.0.0:8787")
+	d := discovery.NewSimpleDiscovery(balance.NewRoundRobin())
+	d.Register(&discovery.ServerItem{Protocol: "tcp", Addr: "0.0.0.0:8787"})
+	c, err := client.NewClient(d)
 	if err != nil {
 		log.Fatalln(err)
 	}

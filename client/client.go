@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/cyj19/sparrow/codec"
 	"github.com/cyj19/sparrow/compressor"
+	"github.com/cyj19/sparrow/discovery"
 	"github.com/cyj19/sparrow/protocol"
 	"github.com/cyj19/sparrow/transport"
 	"github.com/rs/xid"
@@ -27,6 +28,7 @@ type Caller struct {
 
 type Client struct {
 	Option    *Option
+	discovery discovery.Discovery
 	reqMutex  *sync.Mutex
 	respMutex *sync.Mutex
 	conn      net.Conn
@@ -34,15 +36,20 @@ type Client struct {
 	close     chan error // 通知关闭连接
 }
 
-func NewClient(ptl, addr string) (*Client, error) {
+func NewClient(d discovery.Discovery) (*Client, error) {
 	c := &Client{
 		Option:    defaultOption(),
+		discovery: d,
 		reqMutex:  new(sync.Mutex),
 		respMutex: new(sync.Mutex),
 		callMap:   map[string]*Caller{},
 		close:     make(chan error),
 	}
-	conn, err := transport.Client.Gen(transport.Protocol(ptl), addr, c.Option.connectTimeout)
+	serverItem, err := d.Get()
+	if err != nil {
+		return nil, err
+	}
+	conn, err := transport.Client.Gen(transport.Protocol(serverItem.Protocol), serverItem.Addr, c.Option.connectTimeout)
 	if err != nil {
 		return nil, err
 	}
