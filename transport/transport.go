@@ -36,7 +36,7 @@ func (s *server) register(ptl Protocol, fn genServer) {
 func (s *server) Gen(ptl Protocol, addr string) (net.Listener, error) {
 	fn, ex := s.container[ptl]
 	if !ex {
-		return nil, errors.New(fmt.Sprintf("rpc do not support protocol: %s", ptl))
+		return nil, errors.New(fmt.Sprintf("rpc server do not support protocol: %s", ptl))
 	}
 	return fn(addr)
 }
@@ -58,7 +58,7 @@ func (c *client) register(ptl Protocol, fn genClient) {
 func (c *client) Gen(ptl Protocol, addr string, timeout time.Duration) (net.Conn, error) {
 	fn, ex := c.container[ptl]
 	if !ex {
-		return nil, errors.New(fmt.Sprintf("rpc do not support protocol: %s", ptl))
+		return nil, errors.New(fmt.Sprintf("rpc client do not support protocol: %s", ptl))
 	}
 	return fn(addr, timeout)
 }

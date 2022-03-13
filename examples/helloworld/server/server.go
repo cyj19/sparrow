@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/cyj19/sparrow/registry"
 	"github.com/cyj19/sparrow/server"
 	"log"
 )
@@ -28,9 +29,9 @@ func (w *HelloWorld) Hello(args *HelloWordRequest, reply *HelloWordResponse) err
 }
 
 func main() {
-
 	s := server.NewServer()
 	s.Register(&HelloWorld{})
+	registry.HeartBeat("http://localhost:9999/sparrow/registry", "tcp", ":8787", 0)
 	err := s.Run(server.UseTCP("0.0.0.0:8787"))
 	if err != nil {
 		log.Fatalln(err)

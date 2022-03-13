@@ -25,8 +25,7 @@ type ResponseReply struct {
 }
 
 func main() {
-	d := discovery.NewSimpleDiscovery(balance.NewRoundRobin())
-	d.Register(&discovery.ServerItem{Protocol: "tcp", Addr: "0.0.0.0:8787"})
+	d := discovery.NewSparrowDiscovery("http://localhost:9999/sparrow/registry", 0, balance.NewRoundRobin())
 	c, err := client.NewClient(d)
 	if err != nil {
 		log.Fatalln(err)
