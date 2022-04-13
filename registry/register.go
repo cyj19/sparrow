@@ -85,7 +85,7 @@ func (r *SparrowRegistry) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			log.Println(err)
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-		w.Write(result)
+		_, _ = w.Write(result)
 	case http.MethodPost:
 		param, err := io.ReadAll(req.Body)
 		if err != nil {
