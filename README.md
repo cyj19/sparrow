@@ -15,13 +15,16 @@ git clone https://github.com/cyj19/sparrow.git
 cd examples/helloworld
 
 # 启动注册中心
-go run registry/registry.go
+cd registry
+go run registry.go
 
 # 启动服务端
-go run server/server.go
+cd server
+go run server.go
 
 # 启动客户端
-go run client/client.go
+cd client
+go run client.go
 ```
 
 ### 如何使用sparrow
