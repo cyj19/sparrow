@@ -138,6 +138,7 @@ func HeartBeat(registry, protocol, addr string, timeout time.Duration) {
 	err := sendHeartBeat(registry, protocol, addr)
 	go func() {
 		ticker := time.NewTicker(timeout)
+		defer ticker.Stop()
 		for err == nil {
 			<-ticker.C
 			err = sendHeartBeat(registry, protocol, addr)
