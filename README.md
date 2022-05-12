@@ -1,6 +1,9 @@
 # sparrow
 sparrow意为麻雀，俗话说“麻雀虽小，五脏俱全”，希望该项目也如此，能帮助大家更好地理解RPC原理
 
+## RPC调用过程
+![rpc流程](https://github.com/cyj19/sparrow/pictures/rpc.png)
+
 ## 上手指南
 以下指南帮助你在本地机器上运行该项目
 
