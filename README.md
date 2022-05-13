@@ -1,4 +1,7 @@
 # sparrow
+![](https://img.shields.io/badge/Go-v1.17-blue) 
+![](https://img.shields.io/github/license/cyj19/sparrow)  
+
 sparrow意为麻雀，俗话说“麻雀虽小，五脏俱全”，希望该项目也如此，能帮助大家更好地理解RPC原理
 
 ## RPC调用过程
